@@ -485,12 +485,12 @@ class PodManager(LoggingMixin):
                         line=line, client=self._client, mode=ExecutionMode.SYNC
                     )
 
-        def process_log_line(*, line: str, message_to_log: str | None, message_timestamp: DateTime | None, unprocessed_callback_log_lines: Iterable[str]) -> tuple[str, DateTime | None]:
+        def process_log_line(*, line: str, message_to_log: str | None, message_timestamp: DateTime | None, unprocessed_callback_log_lines: list[str]) -> tuple[str, DateTime | None]:
             line_timestamp, message = self.parse_log_line(line)
             if line_timestamp:  # detect new log line
-                if message_to_log is not None: # previous log line is complete
+                if message_to_log is not None: # We have a completed, previous log line
                     execute_progress_callbacks(callback_log_lines=unprocessed_callback_log_lines)
-                    unprocessed_callback_log_lines = []
+                    unprocessed_callback_log_lines.clear()
                     if is_log_group_marker(message_to_log):
                         print(message_to_log)
                     else:
@@ -502,8 +502,9 @@ class PodManager(LoggingMixin):
                 result_message_to_log = f"{message_to_log}\n{message}"
                 result_message_timestamp = message_timestamp
 
-            result_progress_log_lines = unprocessed_callback_log_lines + [line]
-            return result_message_to_log, result_message_timestamp, result_progress_log_lines
+            unprocessed_callback_log_lines.append(line)
+
+            return result_message_to_log, result_message_timestamp
 
         def consume_logs(*, since_time: DateTime | None = None) -> tuple[DateTime | None, Exception | None]:
             """
@@ -544,7 +545,7 @@ class PodManager(LoggingMixin):
                 try:
                     for raw_line in logs:
                         line = raw_line.decode("utf-8", errors="backslashreplace")
-                        message_to_log, message_timestamp, progress_callback_lines = process_log_line(
+                        message_to_log, message_timestamp = process_log_line(
                             line=line,
                             message_to_log=message_to_log,
                             message_timestamp=message_timestamp,
