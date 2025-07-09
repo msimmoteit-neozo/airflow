@@ -487,7 +487,7 @@ class PodManager(LoggingMixin):
 
             callback_log_lines = []
 
-        def process_log_line(*, line: str, message_to_log: str | None, unprocessed_callback_log_lines: Iterable[str]) -> tuple[str, DateTime | None]:
+        def process_log_line(*, line: str, message_to_log: str | None, message_timestamp: DateTime | None, unprocessed_callback_log_lines: Iterable[str]) -> tuple[str, DateTime | None]:
             line_timestamp, message = self.parse_log_line(line)
             if line_timestamp:  # detect new log line
                 if message_to_log is not None: # previous log line is complete
@@ -498,12 +498,13 @@ class PodManager(LoggingMixin):
                         self.log.info("[%s] %s", container_name, message_to_log)
 
                 result_message_to_log = message
-                message_timestamp = line_timestamp
+                result_message_timestamp = line_timestamp
             else:  # continuation of the previous log line
                 result_message_to_log = f"{message_to_log}\n{message}"
+                result_message_timestamp = message_timestamp
 
             unprocessed_callback_log_lines.append(line)
-            return result_message_to_log, message_timestamp
+            return result_message_to_log, result_message_timestamp
 
         def consume_logs(*, since_time: DateTime | None = None) -> tuple[DateTime | None, Exception | None]:
             """
@@ -547,6 +548,7 @@ class PodManager(LoggingMixin):
                         message_to_log, message_timestamp = process_log_line(
                             line=line,
                             message_to_log=message_to_log,
+                            message_timestamp=message_timestamp,
                             unprocessed_callback_log_lines=progress_callback_lines,
                         )
                 finally:
