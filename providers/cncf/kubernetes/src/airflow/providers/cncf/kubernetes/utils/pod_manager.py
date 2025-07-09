@@ -478,6 +478,35 @@ class PodManager(LoggingMixin):
         :meta private:
         """
 
+        def execute_progress_callbacks(*, callback_log_lines: Iterable[str]):
+            for line in callback_log_lines:
+                for callback in self._callbacks:
+                    callback.progress_callback(
+                        line=line, client=self._client, mode=ExecutionMode.SYNC
+                    )
+
+            callback_log_lines = []
+
+        def process_log_line(*, line: str, message_to_log: str | None, unprocessed_callback_log_lines: Iterable[str]) -> tuple[str, DateTime | None]:
+            line_timestamp, message = self.parse_log_line(line)
+            if line_timestamp:  # detect new log line
+                if message_to_log is None:  # first line in the log
+                    result_message_to_log = message
+                    message_timestamp = line_timestamp
+                else:  # previous log line is complete
+                    execute_progress_callbacks(unprocessed_callback_log_lines)
+                    if is_log_group_marker(message_to_log):
+                        print(message_to_log)
+                    else:
+                        self.log.info("[%s] %s", container_name, message_to_log)
+                    result_message_to_log = message
+                    message_timestamp = line_timestamp
+            else:  # continuation of the previous log line
+                result_message_to_log = f"{message_to_log}\n{message}"
+
+            unprocessed_callback_log_lines.append(line)
+            return result_message_to_log, message_timestamp
+
         def consume_logs(*, since_time: DateTime | None = None) -> tuple[DateTime | None, Exception | None]:
             """
             Try to follow container logs until container completes.
@@ -517,37 +546,14 @@ class PodManager(LoggingMixin):
                 try:
                     for raw_line in logs:
                         line = raw_line.decode("utf-8", errors="backslashreplace")
-                        line_timestamp, message = self.parse_log_line(line)
-                        if line_timestamp:  # detect new log line
-                            if message_to_log is None:  # first line in the log
-                                message_to_log = message
-                                message_timestamp = line_timestamp
-                                progress_callback_lines.append(line)
-                            else:  # previous log line is complete
-                                for progress_line in progress_callback_lines:
-                                    for callback in self._callbacks:
-                                        callback.progress_callback(
-                                            line=progress_line, client=self._client, mode=ExecutionMode.SYNC
-                                        )
-                                if message_to_log is not None:
-                                    if is_log_group_marker(message_to_log):
-                                        print(message_to_log)
-                                    else:
-                                        self.log.info("[%s] %s", container_name, message_to_log)
-                                last_captured_timestamp = message_timestamp
-                                message_to_log = message
-                                message_timestamp = line_timestamp
-                                progress_callback_lines = [line]
-                        else:  # continuation of the previous log line
-                            message_to_log = f"{message_to_log}\n{message}"
-                            progress_callback_lines.append(line)
+                        message_to_log, message_timestamp = process_log_line(
+                            line=line,
+                            message_to_log=message_to_log,
+                            unprocessed_callback_log_lines=progress_callback_lines,
+                        )
                 finally:
                     # log the last line and update the last_captured_timestamp
-                    for line in progress_callback_lines:
-                        for callback in self._callbacks:
-                            callback.progress_callback(
-                                line=line, client=self._client, mode=ExecutionMode.SYNC
-                            )
+                    execute_progress_callbacks(progress_callback_lines)
                     if message_to_log is not None:
                         if is_log_group_marker(message_to_log):
                             print(message_to_log)
