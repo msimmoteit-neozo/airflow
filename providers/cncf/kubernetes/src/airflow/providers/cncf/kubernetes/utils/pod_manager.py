@@ -490,17 +490,15 @@ class PodManager(LoggingMixin):
         def process_log_line(*, line: str, message_to_log: str | None, unprocessed_callback_log_lines: Iterable[str]) -> tuple[str, DateTime | None]:
             line_timestamp, message = self.parse_log_line(line)
             if line_timestamp:  # detect new log line
-                if message_to_log is None:  # first line in the log
-                    result_message_to_log = message
-                    message_timestamp = line_timestamp
-                else:  # previous log line is complete
+                if message_to_log is not None: # previous log line is complete
                     execute_progress_callbacks(unprocessed_callback_log_lines)
                     if is_log_group_marker(message_to_log):
                         print(message_to_log)
                     else:
                         self.log.info("[%s] %s", container_name, message_to_log)
-                    result_message_to_log = message
-                    message_timestamp = line_timestamp
+
+                result_message_to_log = message
+                message_timestamp = line_timestamp
             else:  # continuation of the previous log line
                 result_message_to_log = f"{message_to_log}\n{message}"
 
