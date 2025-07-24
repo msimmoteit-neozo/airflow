@@ -498,8 +498,11 @@ class PodManager(LoggingMixin):
 
                 result_message_to_log = message
                 result_message_timestamp = line_timestamp
-            else:  # continuation of the previous log line
+            elif message_to_log is not None:  # continuation of the previous log line
                 result_message_to_log = f"{message_to_log}\n{message}"
+                result_message_timestamp = message_timestamp
+            else:
+                result_message_to_log = message
                 result_message_timestamp = message_timestamp
 
             unprocessed_callback_log_lines.append(line)
